@@ -1,8 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
 
-/* ─────────────────────────────────────────────
-   Fonts injected once
-───────────────────────────────────────────── */
 const FONT_LINK =
   "https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap";
 
@@ -54,22 +51,6 @@ function fmt(n) {
   return dec !== undefined ? `${intFmt}.${dec}` : intFmt;
 }
 
-/* ─── Clock helper ─── */
-function useClock() {
-  const [time, setTime] = useState(() => {
-    const d = new Date();
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  });
-  useEffect(() => {
-    const id = setInterval(() => {
-      const d = new Date();
-      setTime(d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
-    }, 10000);
-    return () => clearInterval(id);
-  }, []);
-  return time;
-}
-
 /* ─── Press-scale hook ─── */
 function usePress() {
   const [pressed, setPressed] = useState(false);
@@ -83,13 +64,38 @@ function usePress() {
   };
 }
 
-/* ─── Individual Button ─── */
+/* ─── Backspace SVG icon ─── */
+function BackspaceIcon({ size = 22, color = "#c9a86c" }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M22 3H7C6.27 3 5.6 3.35 5.18 3.88L1.5 8.5C1.18 8.9 1 9.44 1 10V14C1 14.56 1.18 15.1 1.5 15.5L5.18 20.12C5.6 20.65 6.27 21 7 21H22C23.1 21 24 20.1 24 19V5C24 3.9 23.1 3 22 3Z"
+        stroke={color}
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M17 9L12 14M12 9L17 14"
+        stroke={color}
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/* ─── Individual Calc Button ─── */
 function CalcButton({ btn, activeOp, onClick }) {
   const { pressed, handlers } = usePress();
-
   const isActive = btn.type === "op" && activeOp === btn.action;
 
-  /* base */
   const base = {
     fontFamily: "'Outfit', sans-serif",
     fontWeight: 600,
@@ -143,7 +149,6 @@ function CalcButton({ btn, activeOp, onClick }) {
           : "0 4px 0 #0e0a1e, 0 6px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(201,168,108,0.1)",
     });
   } else {
-    /* equals */
     Object.assign(base, {
       background: pressed
         ? "linear-gradient(145deg, #d4943a, #b57020)"
@@ -163,6 +168,36 @@ function CalcButton({ btn, activeOp, onClick }) {
   );
 }
 
+/* ─── Backspace Button ─── */
+function BackspaceButton({ onClick }) {
+  const { pressed, handlers } = usePress();
+  return (
+    <button
+      onClick={onClick}
+      {...handlers}
+      style={{
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        outline: "none",
+        WebkitTapHighlightColor: "transparent",
+        userSelect: "none",
+        padding: "10px 12px",
+        borderRadius: 16,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        transform: pressed ? "scale(0.82)" : "scale(1)",
+        transition:
+          "transform 120ms cubic-bezier(.34,1.56,.64,1), opacity 120ms ease",
+        opacity: pressed ? 0.6 : 1,
+      }}
+    >
+      <BackspaceIcon size={26} color="#c9a86c" />
+    </button>
+  );
+}
+
 /* ─── Main App ─── */
 export default function Calculator() {
   const [display, setDisplay] = useState("0");
@@ -173,9 +208,7 @@ export default function Calculator() {
   const [activeOp, setActiveOp] = useState(null);
   const [isError, setIsError] = useState(false);
   const [flash, setFlash] = useState(false);
-  const clock = useClock();
 
-  /* inject font */
   useEffect(() => {
     if (!document.querySelector("#calc-fonts")) {
       const l = document.createElement("link");
@@ -190,6 +223,25 @@ export default function Calculator() {
     setFlash(true);
     setTimeout(() => setFlash(false), 180);
   };
+
+  /* ── Backspace handler ── */
+  const handleBackspace = useCallback(() => {
+    if (isError) {
+      setDisplay("0");
+      setIsError(false);
+      return;
+    }
+    if (waitNext) return; // don't delete after operator pressed
+    if (
+      display.length <= 1 ||
+      (display.length === 2 && display.startsWith("-"))
+    ) {
+      setDisplay("0");
+    } else {
+      const next = display.slice(0, -1);
+      setDisplay(next.endsWith(",") ? next.slice(0, -1) : next);
+    }
+  }, [display, isError, waitNext]);
 
   const handleInput = useCallback(
     (action, type) => {
@@ -295,7 +347,6 @@ export default function Calculator() {
         background:
           "radial-gradient(ellipse at 30% 20%, #1a1030 0%, #0c0a14 60%, #080810 100%)",
         fontFamily: "'Outfit', sans-serif",
-        padding: "0",
       }}
     >
       {/* ── Phone shell ── */}
@@ -312,85 +363,20 @@ export default function Calculator() {
           overflow: "hidden",
         }}
       >
-        {/* ambient glow top */}
+        {/* ambient glow */}
         <div
           style={{
             position: "absolute",
             top: -60,
             left: "50%",
             transform: "translateX(-50%)",
-            width: 260,
-            height: 180,
+            width: 280,
+            height: 200,
             background:
-              "radial-gradient(ellipse, rgba(201,131,42,0.12) 0%, transparent 70%)",
+              "radial-gradient(ellipse, rgba(201,131,42,0.10) 0%, transparent 70%)",
             pointerEvents: "none",
           }}
         />
-
-        {/* ── Status bar ── */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "14px 28px 0",
-            fontSize: 13,
-            fontWeight: 600,
-            color: "rgba(255,255,255,0.45)",
-            letterSpacing: "0.03em",
-          }}
-        >
-          <span>{clock}</span>
-          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            {/* signal dots */}
-            {[1, 2, 3, 4].map((i) => (
-              <div
-                key={i}
-                style={{
-                  width: 3,
-                  height: 3 + i * 2,
-                  borderRadius: 2,
-                  background:
-                    i <= 3 ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.18)",
-                }}
-              />
-            ))}
-            <div
-              style={{
-                width: 18,
-                height: 10,
-                borderRadius: 3,
-                border: "1.5px solid rgba(255,255,255,0.35)",
-                marginLeft: 4,
-                position: "relative",
-              }}
-            >
-              <div
-                style={{
-                  position: "absolute",
-                  top: 2,
-                  left: 2,
-                  right: 4,
-                  bottom: 2,
-                  borderRadius: 1,
-                  background: "rgba(255,255,255,0.5)",
-                }}
-              />
-              <div
-                style={{
-                  position: "absolute",
-                  right: -4,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  width: 2,
-                  height: 5,
-                  borderRadius: 1,
-                  background: "rgba(255,255,255,0.35)",
-                }}
-              />
-            </div>
-          </div>
-        </div>
 
         {/* ── Display area ── */}
         <div
@@ -399,12 +385,44 @@ export default function Calculator() {
             display: "flex",
             flexDirection: "column",
             justifyContent: "flex-end",
-            padding: "0 28px 28px",
+            padding: "40px 24px 24px",
             minHeight: 200,
             position: "relative",
           }}
         >
-          {/* history expression */}
+          {/* backspace button — top right of display */}
+          <div
+            style={{
+              position: "absolute",
+              top: 20,
+              right: 16,
+            }}
+          >
+            <BackspaceButton onClick={handleBackspace} />
+          </div>
+
+          {/* operator badge — top left */}
+          {operator && (
+            <div style={{ position: "absolute", top: 28, left: 24 }}>
+              <span
+                style={{
+                  fontFamily: "'Space Mono', monospace",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: "3px 12px",
+                  borderRadius: 20,
+                  letterSpacing: "0.08em",
+                  background: "rgba(201,131,42,0.15)",
+                  border: "1px solid rgba(201,168,108,0.35)",
+                  color: "#c9a86c",
+                }}
+              >
+                {OP_SYMBOLS[operator]}
+              </span>
+            </div>
+          )}
+
+          {/* history */}
           <p
             style={{
               textAlign: "right",
@@ -413,7 +431,7 @@ export default function Calculator() {
               color: "rgba(255,255,255,0.22)",
               letterSpacing: "0.04em",
               minHeight: 22,
-              marginBottom: 6,
+              marginBottom: 8,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -448,7 +466,7 @@ export default function Calculator() {
             margin: "0 20px",
             height: 1,
             background:
-              "linear-gradient(90deg, transparent, rgba(201,168,108,0.12), transparent)",
+              "linear-gradient(90deg, transparent, rgba(201,168,108,0.14), transparent)",
           }}
         />
 
@@ -458,7 +476,7 @@ export default function Calculator() {
             display: "grid",
             gridTemplateColumns: "repeat(4, 1fr)",
             gap: 14,
-            padding: "20px 18px 40px",
+            padding: "20px 18px 48px",
           }}
         >
           {BUTTONS.map((btn) => (
@@ -469,24 +487,6 @@ export default function Calculator() {
               onClick={() => handleInput(btn.action, btn.type)}
             />
           ))}
-        </div>
-
-        {/* bottom home indicator */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            paddingBottom: 12,
-          }}
-        >
-          <div
-            style={{
-              width: 120,
-              height: 4,
-              borderRadius: 4,
-              background: "rgba(255,255,255,0.18)",
-            }}
-          />
         </div>
       </div>
     </div>
