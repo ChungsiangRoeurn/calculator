@@ -1,1427 +1,494 @@
-import React, { useEffect, useState } from "react";
-import specialPhoto from "./assets/doardoar.jpg";
+import { useState, useCallback, useEffect } from "react";
 
-export default function ValentinesFlowers() {
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [particles, setParticles] = useState([]);
-  const [clickedFlowers, setClickedFlowers] = useState([]);
-  const [allFlowersClicked, setAllFlowersClicked] = useState(false);
-  const [showNameReveal, setShowNameReveal] = useState(false);
-  const [nameRevealed, setNameRevealed] = useState(false);
-  const [showWishes, setShowWishes] = useState(false);
-  const [currentWish, setCurrentWish] = useState(0);
-  const [showPhoto, setShowPhoto] = useState(false);
+/* ─────────────────────────────────────────────
+   Fonts injected once
+───────────────────────────────────────────── */
+const FONT_LINK =
+  "https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap";
 
-  const romanticWishes = [
-    {
-      emoji: "🌹",
-      wish: "Every moment with you feels like a beautiful dream I never want to wake up from",
-      color: "from-red-400 to-pink-500",
-    },
-    {
-      emoji: "💫",
-      wish: "You are the brightest star in my sky, lighting up even my darkest days",
-      color: "from-purple-400 to-blue-500",
-    },
-    {
-      emoji: "💖",
-      wish: "My heart beats faster every time I think of you, and I think of you all the time",
-      color: "from-pink-400 to-rose-500",
-    },
-    {
-      emoji: "🌸",
-      wish: "Like flowers need sunshine, I need you to make my world beautiful",
-      color: "from-orange-400 to-pink-500",
-    },
-    {
-      emoji: "✨",
-      wish: "You make ordinary moments extraordinary just by being you",
-      color: "from-cyan-400 to-purple-500",
-    },
-    {
-      emoji: "💝",
-      wish: "I promise to cherish every smile, every laugh, and every moment we share together",
-      color: "from-fuchsia-400 to-pink-500",
-    },
-  ];
+const OP_SYMBOLS = { "/": "÷", "*": "×", "-": "−", "+": "+" };
 
+const BUTTONS = [
+  { label: "AC", type: "fn", action: "clear" },
+  { label: "+/−", type: "fn", action: "negate" },
+  { label: "%", type: "fn", action: "percent" },
+  { label: "÷", type: "op", action: "/" },
+  { label: "7", type: "num", action: "7" },
+  { label: "8", type: "num", action: "8" },
+  { label: "9", type: "num", action: "9" },
+  { label: "×", type: "op", action: "*" },
+  { label: "4", type: "num", action: "4" },
+  { label: "5", type: "num", action: "5" },
+  { label: "6", type: "num", action: "6" },
+  { label: "−", type: "op", action: "-" },
+  { label: "1", type: "num", action: "1" },
+  { label: "2", type: "num", action: "2" },
+  { label: "3", type: "num", action: "3" },
+  { label: "+", type: "op", action: "+" },
+  { label: "0", type: "num", action: "0", wide: true },
+  { label: ".", type: "num", action: "." },
+  { label: "=", type: "eq", action: "=" },
+];
+
+function compute(a, b, op) {
+  switch (op) {
+    case "+":
+      return a + b;
+    case "-":
+      return a - b;
+    case "*":
+      return a * b;
+    case "/":
+      return b === 0 ? null : a / b;
+    default:
+      return b;
+  }
+}
+
+function fmt(n) {
+  if (n === null || isNaN(n) || !isFinite(n)) return "Error";
+  const s = parseFloat(n.toPrecision(12)).toString();
+  if (s.includes("e")) return s;
+  const [int, dec] = s.split(".");
+  const intFmt = int.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return dec !== undefined ? `${intFmt}.${dec}` : intFmt;
+}
+
+/* ─── Clock helper ─── */
+function useClock() {
+  const [time, setTime] = useState(() => {
+    const d = new Date();
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  });
   useEffect(() => {
-    setIsLoaded(true);
-
-    // Generate magical particles
-    const newParticles = Array.from({ length: 50 }, (_, i) => ({
-      id: i,
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      size: Math.random() * 4 + 2,
-      duration: Math.random() * 20 + 15,
-      delay: Math.random() * 5,
-      color: ["#FFD700", "#FF69B4", "#87CEEB", "#98FB98", "#DDA0DD", "#F0E68C"][
-        Math.floor(Math.random() * 6)
-      ],
-    }));
-    setParticles(newParticles);
+    const id = setInterval(() => {
+      const d = new Date();
+      setTime(d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+    }, 10000);
+    return () => clearInterval(id);
   }, []);
+  return time;
+}
 
-  useEffect(() => {
-    // Check if all 9 flowers have been clicked
-    const uniqueClicks = new Set(clickedFlowers).size;
-    if (uniqueClicks === 9 && !allFlowersClicked) {
-      setAllFlowersClicked(true);
-      setTimeout(() => {
-        setShowNameReveal(true);
-      }, 500);
-    }
-  }, [clickedFlowers, allFlowersClicked]);
+/* ─── Press-scale hook ─── */
+function usePress() {
+  const [pressed, setPressed] = useState(false);
+  return {
+    pressed,
+    handlers: {
+      onPointerDown: () => setPressed(true),
+      onPointerUp: () => setPressed(false),
+      onPointerLeave: () => setPressed(false),
+    },
+  };
+}
 
-  const handleFlowerClick = (index) => {
-    // Add flower to clicked list if not already clicked
-    if (!clickedFlowers.includes(index)) {
-      setClickedFlowers([...clickedFlowers, index]);
-    }
+/* ─── Individual Button ─── */
+function CalcButton({ btn, activeOp, onClick }) {
+  const { pressed, handlers } = usePress();
+
+  const isActive = btn.type === "op" && activeOp === btn.action;
+
+  /* base */
+  const base = {
+    fontFamily: "'Outfit', sans-serif",
+    fontWeight: 600,
+    fontSize:
+      btn.type === "op" || btn.type === "eq" ? 26 : btn.type === "fn" ? 15 : 22,
+    height: 72,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: btn.wide ? "flex-start" : "center",
+    paddingLeft: btn.wide ? 32 : 0,
+    borderRadius: btn.wide ? 36 : 24,
+    border: "none",
+    cursor: "pointer",
+    outline: "none",
+    WebkitTapHighlightColor: "transparent",
+    userSelect: "none",
+    transition:
+      "transform 120ms cubic-bezier(.34,1.56,.64,1), box-shadow 120ms ease",
+    transform: pressed ? "scale(0.88)" : "scale(1)",
+    position: "relative",
+    overflow: "hidden",
+    gridColumn: btn.wide ? "span 2" : undefined,
   };
 
-  const handleRevealName = () => {
-    setNameRevealed(true);
-    // Show photo first for dramatic effect
-    setTimeout(() => {
-      setShowPhoto(true);
-    }, 1000);
-    // Start wishes after photo appears
-    setTimeout(() => {
-      setShowWishes(true);
-    }, 3000);
-  };
-
-  const handleNextWish = () => {
-    if (currentWish < romanticWishes.length - 1) {
-      setCurrentWish(currentWish + 1);
-    }
-  };
-
-  const getProgressText = () => {
-    const uniqueClicks = new Set(clickedFlowers).size;
-    if (uniqueClicks === 0) return "💡 Tap each flower to see magic!";
-    if (uniqueClicks < 9) return `✨ ${uniqueClicks}/9 flowers discovered!`;
-    return "🎉 All flowers bloomed!";
-  };
+  if (btn.type === "num") {
+    Object.assign(base, {
+      background: "linear-gradient(145deg, #242436, #1c1c2e)",
+      color: "#eeeeff",
+      boxShadow: pressed
+        ? "inset 0 2px 6px rgba(0,0,0,0.5)"
+        : "0 4px 0 #0e0e1a, 0 6px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.07)",
+    });
+  } else if (btn.type === "fn") {
+    Object.assign(base, {
+      background: "linear-gradient(145deg, #1e1e32, #181828)",
+      color: "#94a3b8",
+      boxShadow: pressed
+        ? "inset 0 2px 6px rgba(0,0,0,0.5)"
+        : "0 3px 0 #0c0c18, 0 5px 14px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.05)",
+    });
+  } else if (btn.type === "op") {
+    Object.assign(base, {
+      background: isActive
+        ? "linear-gradient(145deg, #e8a94a, #c9832a)"
+        : "linear-gradient(145deg, #2a2240, #201a34)",
+      color: isActive ? "#fff8ee" : "#c9a86c",
+      boxShadow: pressed
+        ? "inset 0 2px 8px rgba(0,0,0,0.5)"
+        : isActive
+          ? "0 4px 0 #7a4a10, 0 6px 24px rgba(201,131,42,0.45), inset 0 1px 0 rgba(255,255,255,0.15)"
+          : "0 4px 0 #0e0a1e, 0 6px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(201,168,108,0.1)",
+    });
+  } else {
+    /* equals */
+    Object.assign(base, {
+      background: pressed
+        ? "linear-gradient(145deg, #d4943a, #b57020)"
+        : "linear-gradient(145deg, #f0a83c, #d4843c)",
+      color: "#1a0e00",
+      fontWeight: 700,
+      boxShadow: pressed
+        ? "inset 0 2px 8px rgba(0,0,0,0.3)"
+        : "0 5px 0 #7a4210, 0 8px 28px rgba(240,168,60,0.45), inset 0 1px 0 rgba(255,255,255,0.25)",
+    });
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-pink-900 to-orange-900 flex items-center justify-center p-3 sm:p-6 md:p-8 overflow-hidden relative">
-      {/* Animated gradient overlay */}
-      <div className="absolute inset-0 opacity-30">
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 animate-gradient"></div>
-      </div>
-
-      {/* Magical particles */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {particles.map((particle) => (
-          <div
-            key={particle.id}
-            className="absolute rounded-full animate-float-sparkle"
-            style={{
-              left: `${particle.x}%`,
-              top: `${particle.y}%`,
-              width: `${particle.size}px`,
-              height: `${particle.size}px`,
-              backgroundColor: particle.color,
-              boxShadow: `0 0 10px ${particle.color}`,
-              animationDuration: `${particle.duration}s`,
-              animationDelay: `${particle.delay}s`,
-            }}
-          />
-        ))}
-      </div>
-
-      {/* Floating geometric shapes */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {[...Array(8)].map((_, i) => (
-          <div
-            key={i}
-            className="absolute animate-float-geo"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${i * 0.5}s`,
-              animationDuration: `${15 + i * 2}s`,
-            }}
-          >
-            <div className="w-8 h-8 sm:w-12 md:w-16 sm:h-12 md:h-16 border-2 border-white opacity-10 rotate-45 animate-spin-slow"></div>
-          </div>
-        ))}
-      </div>
-
-      <div className="relative z-10 text-center w-full max-w-6xl">
-        {/* Title with glowing effect */}
-        <div
-          className={`mb-4 sm:mb-6 md:mb-8 transition-all duration-1000 ${
-            isLoaded ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-10"
-          }`}
-        >
-          <h1
-            className="text-3xl xs:text-4xl sm:text-5xl md:text-6xl lg:text-8xl font-bold mb-2 sm:mb-3 md:mb-4 animate-glow-pulse px-2"
-            style={{
-              fontFamily: "'Poppins', sans-serif",
-              background:
-                "linear-gradient(45deg, #FF6B9D, #C06C84, #F67280, #FFD93D, #6BCB77)",
-              backgroundSize: "200% 200%",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
-              textShadow: "0 0 30px rgba(255,107,157,0.5)",
-              animation: "gradient-shift 3s ease infinite",
-            }}
-          >
-            Happy Valentine's Day
-          </h1>
-          <p
-            className="text-xl xs:text-2xl sm:text-3xl md:text-4xl text-pink-300 animate-pulse-slow px-2"
-            style={{ fontFamily: "'Caveat', cursive" }}
-          >
-            ✨ To my dearest Pidoar ✨
-          </p>
-        </div>
-
-        {/* Progress Indicator */}
-        <div
-          className={`mb-4 sm:mb-6 transition-all duration-500 px-2 ${
-            isLoaded ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          <div className="inline-block px-4 py-2 sm:px-6 sm:py-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-full shadow-lg">
-            <p
-              className="text-sm sm:text-base md:text-lg lg:text-xl text-white font-medium"
-              style={{ fontFamily: "'Poppins', sans-serif" }}
-            >
-              {getProgressText()}
-            </p>
-          </div>
-
-          {/* Progress bar */}
-          <div className="mt-2 sm:mt-3 w-48 sm:w-56 md:w-64 h-2 bg-white/10 rounded-full mx-auto overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-pink-400 via-purple-400 to-blue-400 transition-all duration-500 ease-out"
-              style={{
-                width: `${(new Set(clickedFlowers).size / 9) * 100}%`,
-                boxShadow: "0 0 10px rgba(255,255,255,0.5)",
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Flower Bouquet with glassmorphism vase */}
-        <div className="relative inline-block">
-          {/* Modern glassmorphism vase - Responsive sizing */}
-          <div
-            className={`absolute bottom-0 left-1/2 transform -translate-x-1/2 w-24 h-32 xs:w-28 xs:h-36 sm:w-32 sm:h-40 md:w-40 md:h-48 backdrop-blur-xl bg-white/10 border border-white/20 rounded-t-3xl transition-all duration-1000 delay-500 shadow-2xl ${
-              isLoaded
-                ? "opacity-100 translate-y-0"
-                : "opacity-0 translate-y-10"
-            }`}
-            style={{
-              clipPath: "polygon(25% 0%, 75% 0%, 100% 100%, 0% 100%)",
-            }}
-          >
-            <div className="absolute inset-0 bg-gradient-to-b from-cyan-300/20 via-purple-300/20 to-pink-300/20 animate-shimmer"></div>
-            <div className="absolute top-4 sm:top-6 left-1/2 transform -translate-x-1/2 w-20 xs:w-22 sm:w-24 md:w-28 h-2 sm:h-3 bg-white/30 rounded-full backdrop-blur-sm"></div>
-            {/* Sparkles on vase */}
-            {[...Array(6)].map((_, i) => (
-              <div
-                key={i}
-                className="absolute w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full animate-twinkle"
-                style={{
-                  left: `${20 + Math.random() * 60}%`,
-                  top: `${20 + Math.random() * 60}%`,
-                  animationDelay: `${i * 0.3}s`,
-                }}
-              />
-            ))}
-          </div>
-
-          {/* Flowers Container - Responsive sizing */}
-          <div className="relative w-[280px] h-[280px] xs:w-[320px] xs:h-[320px] sm:w-[380px] sm:h-[360px] md:w-[450px] md:h-[420px] lg:w-[500px] lg:h-[450px] mx-auto">
-            {/* Rainbow colored flowers - Adjusted positions for mobile */}
-            {[
-              {
-                color: "from-red-400 via-pink-500 to-red-600",
-                pos: "left-1/2 top-24 xs:top-28 sm:top-32 -translate-x-1/2",
-                size: "large",
-                delay: 700,
-                index: 0,
-              },
-              {
-                color: "from-purple-400 via-pink-400 to-purple-600",
-                pos: "left-8 xs:left-12 sm:left-16 md:left-20 top-32 xs:top-36 sm:top-40 md:top-44",
-                size: "medium",
-                delay: 900,
-                rotate: "-15deg",
-                index: 1,
-              },
-              {
-                color: "from-orange-400 via-yellow-400 to-orange-600",
-                pos: "right-8 xs:right-12 sm:right-16 md:right-20 top-32 xs:top-36 sm:top-40 md:top-44",
-                size: "medium",
-                delay: 1000,
-                rotate: "15deg",
-                index: 2,
-              },
-              {
-                color: "from-blue-400 via-cyan-400 to-blue-600",
-                pos: "left-16 xs:left-20 sm:left-24 md:left-32 top-16 xs:top-18 sm:top-20 md:top-24",
-                size: "medium",
-                delay: 800,
-                rotate: "-25deg",
-                index: 3,
-              },
-              {
-                color: "from-green-400 via-emerald-400 to-green-600",
-                pos: "right-16 xs:right-20 sm:right-24 md:right-32 top-16 xs:top-18 sm:top-20 md:top-24",
-                size: "medium",
-                delay: 1100,
-                rotate: "25deg",
-                index: 4,
-              },
-              {
-                color: "from-fuchsia-400 via-purple-500 to-fuchsia-600",
-                pos: "left-2 xs:left-4 sm:left-6 md:left-8 top-26 xs:top-28 sm:top-32 md:top-36",
-                size: "small",
-                delay: 1200,
-                rotate: "-35deg",
-                index: 5,
-              },
-              {
-                color: "from-yellow-400 via-amber-400 to-yellow-600",
-                pos: "right-2 xs:right-4 sm:right-6 md:right-8 top-26 xs:top-28 sm:top-32 md:top-36",
-                size: "small",
-                delay: 1300,
-                rotate: "35deg",
-                index: 6,
-              },
-              {
-                color: "from-rose-400 via-pink-500 to-rose-600",
-                pos: "left-1/2 top-14 xs:top-16 sm:top-18 md:top-20 -translate-x-1/2 -translate-x-10 xs:-translate-x-12 sm:-translate-x-14 md:-translate-x-16",
-                size: "small",
-                delay: 1400,
-                index: 7,
-              },
-              {
-                color: "from-indigo-400 via-blue-500 to-indigo-600",
-                pos: "left-1/2 top-14 xs:top-16 sm:top-18 md:top-20 -translate-x-1/2 translate-x-10 xs:translate-x-12 sm:translate-x-14 md:translate-x-16",
-                size: "small",
-                delay: 1500,
-                index: 8,
-              },
-            ].map((flower) => {
-              const isClicked = clickedFlowers.includes(flower.index);
-              return (
-                <div
-                  key={flower.index}
-                  className={`absolute ${flower.pos} transform transition-all duration-500 cursor-pointer ${
-                    isLoaded ? "opacity-100 scale-100" : "opacity-0 scale-0"
-                  } ${isClicked ? "scale-110" : "hover:scale-125 active:scale-125"} ${
-                    !isClicked ? "animate-bounce-gentle" : ""
-                  }`}
-                  style={{
-                    transitionDelay: `${flower.delay}ms`,
-                    transform: flower.rotate
-                      ? `rotate(${flower.rotate})`
-                      : undefined,
-                    animationDelay: `${flower.index * 0.3}s`,
-                  }}
-                  onClick={() => handleFlowerClick(flower.index)}
-                >
-                  <Flower
-                    color={flower.color}
-                    size={flower.size}
-                    isActive={isClicked}
-                    isClicked={isClicked}
-                  />
-                  {/* Checkmark indicator when clicked */}
-                  {isClicked && (
-                    <div className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2 w-6 h-6 sm:w-8 sm:h-8 bg-green-400 rounded-full flex items-center justify-center shadow-lg animate-scale-in">
-                      <span className="text-white text-base sm:text-xl font-bold">
-                        ✓
-                      </span>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Surprise Name Reveal Section */}
-        <div
-          className={`mt-8 sm:mt-12 md:mt-16 px-2 transition-all duration-1000 delay-1600 ${
-            isLoaded ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10"
-          }`}
-        >
-          {!showNameReveal ? (
-            <div className="space-y-3 sm:space-y-4">
-              <p
-                className="text-xl xs:text-2xl sm:text-2xl md:text-3xl text-pink-200 italic"
-                style={{ fontFamily: "'Caveat', cursive" }}
-              >
-                With all my love,
-              </p>
-              <p
-                className="text-2xl xs:text-3xl sm:text-3xl md:text-4xl text-purple-200"
-                style={{ fontFamily: "'Caveat', cursive" }}
-              >
-                From someone who dreams of you ♥
-              </p>
-              <p
-                className="text-base xs:text-lg sm:text-lg text-pink-300 mt-2 animate-pulse-slow"
-                style={{ fontFamily: "'Caveat', cursive" }}
-              >
-                (Find all the flowers to discover who... 🌸✨)
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4 sm:space-y-6">
-              {!nameRevealed ? (
-                <div className="animate-fade-in-up">
-                  <p
-                    className="text-xl xs:text-2xl sm:text-2xl md:text-3xl text-pink-200 italic mb-3 sm:mb-4"
-                    style={{ fontFamily: "'Caveat', cursive" }}
-                  >
-                    🎁 You found all the flowers!
-                  </p>
-                  <button
-                    onClick={handleRevealName}
-                    className="group relative px-6 py-3 sm:px-8 sm:py-4 bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500 rounded-full text-white text-lg sm:text-xl font-bold shadow-2xl hover:shadow-pink-500/50 active:shadow-pink-500/50 transition-all duration-300 hover:scale-110 active:scale-110 animate-pulse-button"
-                    style={{ fontFamily: "'Poppins', sans-serif" }}
-                  >
-                    <span className="relative z-10">
-                      Click for Your Surprise! 🎉
-                    </span>
-                    <div className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 animate-gradient"></div>
-                  </button>
-                </div>
-              ) : (
-                <div className="animate-name-reveal space-y-3 sm:space-y-4">
-                  <p
-                    className="text-xl xs:text-2xl sm:text-2xl md:text-3xl text-pink-200 italic"
-                    style={{ fontFamily: "'Caveat', cursive" }}
-                  >
-                    With all my love,
-                  </p>
-                  <div className="relative inline-block">
-                    <p
-                      className="text-4xl xs:text-5xl sm:text-6xl md:text-7xl font-bold animate-rainbow-text relative z-10"
-                      style={{
-                        fontFamily: "'Pacifico', cursive",
-                        background:
-                          "linear-gradient(90deg, #FF6B9D, #C06C84, #F67280, #FFD93D, #6BCB77, #4ECDC4)",
-                        backgroundSize: "200% 200%",
-                        WebkitBackgroundClip: "text",
-                        WebkitTextFillColor: "transparent",
-                        backgroundClip: "text",
-                      }}
-                    >
-                      xiang ♥
-                    </p>
-                    {/* Sparkle effects around name */}
-                    {[...Array(12)].map((_, i) => (
-                      <div
-                        key={i}
-                        className="absolute w-2 h-2 sm:w-3 sm:h-3 md:w-4 md:h-4 bg-yellow-300 rounded-full animate-sparkle-around"
-                        style={{
-                          top: "50%",
-                          left: "50%",
-                          transform: `translate(-50%, -50%) rotate(${i * 30}deg) translateY(-50px) sm:translateY(-60px) md:translateY(-80px)`,
-                          animationDelay: `${i * 0.1}s`,
-                          boxShadow: "0 0 10px rgba(255,215,0,0.8)",
-                        }}
-                      />
-                    ))}
-                  </div>
-                  <p
-                    className="text-lg xs:text-xl sm:text-xl md:text-2xl text-purple-200 mt-4 sm:mt-6 animate-fade-in"
-                    style={{ fontFamily: "'Poppins', sans-serif" }}
-                  >
-                    💝 Forever yours 💝
-                  </p>
-
-                  {/* Special Photo Reveal - SURPRISE! */}
-                  {showPhoto && (
-                    <div className="mt-8 sm:mt-10 md:mt-12 animate-photo-reveal">
-                      <div className="relative max-w-xs sm:max-w-sm md:max-w-md mx-auto px-2">
-                        {/* Sparkle explosions around photo */}
-                        {[...Array(20)].map((_, i) => (
-                          <div
-                            key={i}
-                            className="absolute w-2 h-2 sm:w-3 sm:h-3 bg-yellow-400 rounded-full animate-sparkle-explosion"
-                            style={{
-                              top: "50%",
-                              left: "50%",
-                              transform: `translate(-50%, -50%) rotate(${i * 18}deg) translateY(-100px) sm:translateY(-120px) md:translateY(-150px)`,
-                              animationDelay: `${i * 0.05}s`,
-                              boxShadow: "0 0 15px rgba(255,215,0,0.8)",
-                            }}
-                          />
-                        ))}
-
-                        {/* Photo container with magical border */}
-                        <div className="relative p-1.5 sm:p-2 bg-gradient-to-br from-pink-400 via-purple-400 to-blue-400 rounded-2xl sm:rounded-3xl animate-border-spin shadow-2xl">
-                          <div className="relative overflow-hidden rounded-xl sm:rounded-2xl">
-                            <img
-                              src={specialPhoto}
-                              alt="Special Memory"
-                              className="w-full h-auto rounded-xl sm:rounded-2xl animate-photo-zoom"
-                              style={{ maxHeight: "300px", objectFit: "cover" }}
-                            />
-                            {/* Photo overlay glow effect */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-pink-500/20 to-transparent pointer-events-none"></div>
-                          </div>
-
-                          {/* Floating hearts around photo */}
-                          <div className="absolute -top-4 sm:-top-6 -left-4 sm:-left-6 text-3xl sm:text-4xl md:text-5xl animate-heart-pulse">
-                            💕
-                          </div>
-                          <div
-                            className="absolute -top-4 sm:-top-6 -right-4 sm:-right-6 text-3xl sm:text-4xl md:text-5xl animate-heart-pulse"
-                            style={{ animationDelay: "0.3s" }}
-                          >
-                            💖
-                          </div>
-                          <div
-                            className="absolute -bottom-4 sm:-bottom-6 -left-4 sm:-left-6 text-3xl sm:text-4xl md:text-5xl animate-heart-pulse"
-                            style={{ animationDelay: "0.6s" }}
-                          >
-                            💗
-                          </div>
-                          <div
-                            className="absolute -bottom-4 sm:-bottom-6 -right-4 sm:-right-6 text-3xl sm:text-4xl md:text-5xl animate-heart-pulse"
-                            style={{ animationDelay: "0.9s" }}
-                          >
-                            💝
-                          </div>
-                        </div>
-
-                        {/* Caption under photo */}
-                        <div
-                          className="mt-6 sm:mt-8 animate-fade-in-up"
-                          style={{ animationDelay: "0.5s" }}
-                        >
-                          <p
-                            className="text-2xl xs:text-3xl sm:text-3xl md:text-4xl text-pink-200 font-bold mb-2"
-                            style={{
-                              fontFamily: "'Pacifico', cursive",
-                              textShadow: "0 0 20px rgba(255,182,193,0.5)",
-                            }}
-                          >
-                            This is Us... 💕
-                          </p>
-                          <p
-                            className="text-lg xs:text-xl sm:text-xl text-purple-200 italic"
-                            style={{ fontFamily: "'Caveat', cursive" }}
-                          >
-                            Our beautiful moments together ✨
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Romantic Wishes Section */}
-                  {showWishes && (
-                    <div className="mt-8 sm:mt-10 md:mt-12 animate-fade-in-up px-2">
-                      <div className="max-w-xl sm:max-w-2xl mx-auto">
-                        {/* Wish Card */}
-                        <div
-                          className={`relative px-4 py-4 sm:px-6 sm:py-5 md:px-8 md:py-6 bg-gradient-to-br ${romanticWishes[currentWish].color} rounded-2xl sm:rounded-3xl shadow-2xl backdrop-blur-sm border border-white/20 animate-wish-appear`}
-                          key={currentWish}
-                        >
-                          {/* Floating hearts around wish */}
-                          <div className="absolute -top-3 sm:-top-4 -left-3 sm:-left-4 text-2xl sm:text-3xl md:text-4xl animate-float-gentle">
-                            ❤️
-                          </div>
-                          <div
-                            className="absolute -top-3 sm:-top-4 -right-3 sm:-right-4 text-2xl sm:text-3xl md:text-4xl animate-float-gentle"
-                            style={{ animationDelay: "0.5s" }}
-                          >
-                            💕
-                          </div>
-                          <div
-                            className="absolute -bottom-3 sm:-bottom-4 left-1/4 text-xl sm:text-2xl md:text-3xl animate-float-gentle"
-                            style={{ animationDelay: "1s" }}
-                          >
-                            💗
-                          </div>
-                          <div
-                            className="absolute -bottom-3 sm:-bottom-4 right-1/4 text-xl sm:text-2xl md:text-3xl animate-float-gentle"
-                            style={{ animationDelay: "1.5s" }}
-                          >
-                            💖
-                          </div>
-
-                          <div className="text-4xl sm:text-5xl md:text-6xl mb-3 sm:mb-4 animate-bounce-subtle">
-                            {romanticWishes[currentWish].emoji}
-                          </div>
-                          <p
-                            className="text-base xs:text-lg sm:text-xl md:text-2xl text-white font-medium leading-relaxed text-center"
-                            style={{ fontFamily: "'Poppins', sans-serif" }}
-                          >
-                            {romanticWishes[currentWish].wish}
-                          </p>
-                        </div>
-
-                        {/* Progress dots */}
-                        <div className="flex justify-center gap-1.5 sm:gap-2 mt-4 sm:mt-6">
-                          {romanticWishes.map((_, idx) => (
-                            <div
-                              key={idx}
-                              className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full transition-all duration-300 ${
-                                idx === currentWish
-                                  ? "bg-pink-400 scale-125"
-                                  : idx < currentWish
-                                    ? "bg-pink-300"
-                                    : "bg-white/30"
-                              }`}
-                            />
-                          ))}
-                        </div>
-
-                        {/* Navigation */}
-                        {currentWish < romanticWishes.length - 1 ? (
-                          <button
-                            onClick={handleNextWish}
-                            className="mt-4 sm:mt-6 px-6 py-2.5 sm:px-8 sm:py-3 bg-gradient-to-r from-pink-500 to-rose-500 rounded-full text-white text-base sm:text-lg font-bold shadow-lg hover:shadow-pink-500/50 active:shadow-pink-500/50 transition-all duration-300 hover:scale-105 active:scale-105 animate-pulse-gentle"
-                            style={{ fontFamily: "'Poppins', sans-serif" }}
-                          >
-                            Read Next Message 💌
-                          </button>
-                        ) : (
-                          <div className="mt-6 sm:mt-8 space-y-6 sm:space-y-8">
-                            {/* The Most Important Message */}
-                            <div className="animate-fade-in-slow px-4 py-6 sm:px-6 sm:py-8 bg-gradient-to-br from-red-500 via-pink-500 to-rose-500 rounded-2xl sm:rounded-3xl shadow-2xl border-2 sm:border-4 border-white/30 relative overflow-hidden">
-                              {/* Animated hearts background */}
-                              <div className="absolute inset-0 overflow-hidden">
-                                {[...Array(15)].map((_, i) => (
-                                  <div
-                                    key={i}
-                                    className="absolute text-white/20 text-2xl sm:text-3xl md:text-4xl animate-heart-float"
-                                    style={{
-                                      left: `${Math.random() * 100}%`,
-                                      top: `${Math.random() * 100}%`,
-                                      animationDelay: `${i * 0.3}s`,
-                                      animationDuration: `${5 + Math.random() * 3}s`,
-                                    }}
-                                  >
-                                    ♥
-                                  </div>
-                                ))}
-                              </div>
-
-                              <div className="relative z-10">
-                                <div className="text-4xl sm:text-5xl md:text-6xl mb-4 sm:mb-6 animate-heartbeat">
-                                  💕
-                                </div>
-                                <p
-                                  className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl text-white font-bold leading-tight mb-3 sm:mb-4 animate-text-glow"
-                                  style={{
-                                    fontFamily: "'Pacifico', cursive",
-                                    textShadow:
-                                      "0 0 20px rgba(255,255,255,0.5)",
-                                  }}
-                                >
-                                  Can we have a beautiful love together again
-                                  BABY?
-                                </p>
-                                <div className="flex justify-center gap-2 sm:gap-3 md:gap-4 mt-4 sm:mt-6">
-                                  <span
-                                    className="text-3xl sm:text-4xl md:text-5xl animate-bounce-heart"
-                                    style={{ animationDelay: "0s" }}
-                                  >
-                                    💖
-                                  </span>
-                                  <span
-                                    className="text-3xl sm:text-4xl md:text-5xl animate-bounce-heart"
-                                    style={{ animationDelay: "0.2s" }}
-                                  >
-                                    💝
-                                  </span>
-                                  <span
-                                    className="text-3xl sm:text-4xl md:text-5xl animate-bounce-heart"
-                                    style={{ animationDelay: "0.4s" }}
-                                  >
-                                    💗
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Secondary romantic message */}
-                            <div
-                              className="animate-fade-in"
-                              style={{ animationDelay: "0.5s" }}
-                            >
-                              <p
-                                className="text-2xl xs:text-3xl sm:text-3xl md:text-4xl text-pink-200 font-bold mb-3 sm:mb-4"
-                                style={{ fontFamily: "'Pacifico', cursive" }}
-                              >
-                                Will you be mine? 🌹
-                              </p>
-                              <p
-                                className="text-base xs:text-lg sm:text-lg text-purple-200 italic"
-                                style={{ fontFamily: "'Caveat', cursive" }}
-                              >
-                                Let these flowers bloom with our love story ✨
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <style jsx>{`
-        @import url("https://fonts.googleapis.com/css2?family=Poppins:wght@700;900&family=Caveat:wght@700&family=Pacifico&display=swap");
-
-        @keyframes float-sparkle {
-          0%,
-          100% {
-            transform: translateY(0) translateX(0);
-            opacity: 0;
-          }
-          10% {
-            opacity: 1;
-          }
-          90% {
-            opacity: 1;
-          }
-          100% {
-            transform: translateY(-100vh) translateX(20px);
-            opacity: 0;
-          }
-        }
-
-        @keyframes float-geo {
-          0%,
-          100% {
-            transform: translateY(0) rotate(0deg);
-          }
-          50% {
-            transform: translateY(-30px) rotate(180deg);
-          }
-        }
-
-        @keyframes gradient-shift {
-          0%,
-          100% {
-            background-position: 0% 50%;
-          }
-          50% {
-            background-position: 100% 50%;
-          }
-        }
-
-        @keyframes glow-pulse {
-          0%,
-          100% {
-            filter: drop-shadow(0 0 20px rgba(255, 107, 157, 0.5));
-          }
-          50% {
-            filter: drop-shadow(0 0 40px rgba(255, 107, 157, 0.8));
-          }
-        }
-
-        @keyframes shimmer {
-          0% {
-            transform: translateX(-100%);
-          }
-          100% {
-            transform: translateX(100%);
-          }
-        }
-
-        @keyframes twinkle {
-          0%,
-          100% {
-            opacity: 0.3;
-            transform: scale(1);
-          }
-          50% {
-            opacity: 1;
-            transform: scale(1.5);
-          }
-        }
-
-        @keyframes rainbow-text {
-          0%,
-          100% {
-            background-position: 0% 50%;
-          }
-          50% {
-            background-position: 100% 50%;
-          }
-        }
-
-        @keyframes pulse-slow {
-          0%,
-          100% {
-            opacity: 1;
-          }
-          50% {
-            opacity: 0.7;
-          }
-        }
-
-        @keyframes bounce-subtle {
-          0%,
-          100% {
-            transform: translateY(0);
-          }
-          50% {
-            transform: translateY(-5px);
-          }
-        }
-
-        @keyframes bounce-gentle {
-          0%,
-          100% {
-            transform: translateY(0);
-          }
-          50% {
-            transform: translateY(-3px);
-          }
-        }
-
-        @keyframes scale-in {
-          0% {
-            transform: scale(0);
-            opacity: 0;
-          }
-          50% {
-            transform: scale(1.2);
-          }
-          100% {
-            transform: scale(1);
-            opacity: 1;
-          }
-        }
-
-        @keyframes fade-in-up {
-          0% {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          100% {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes name-reveal {
-          0% {
-            opacity: 0;
-            transform: scale(0.5) rotateY(180deg);
-          }
-          50% {
-            transform: scale(1.2) rotateY(0deg);
-          }
-          100% {
-            opacity: 1;
-            transform: scale(1) rotateY(0deg);
-          }
-        }
-
-        @keyframes sparkle-around {
-          0%,
-          100% {
-            opacity: 0;
-            transform: translate(-50%, -50%) scale(0);
-          }
-          50% {
-            opacity: 1;
-            transform: translate(-50%, -50%) scale(1);
-          }
-        }
-
-        @keyframes pulse-button {
-          0%,
-          100% {
-            box-shadow: 0 0 20px rgba(236, 72, 153, 0.5);
-          }
-          50% {
-            box-shadow: 0 0 40px rgba(236, 72, 153, 0.8);
-          }
-        }
-
-        @keyframes fade-in {
-          0% {
-            opacity: 0;
-          }
-          100% {
-            opacity: 1;
-          }
-        }
-
-        @keyframes wish-appear {
-          0% {
-            opacity: 0;
-            transform: scale(0.8) translateY(20px);
-          }
-          100% {
-            opacity: 1;
-            transform: scale(1) translateY(0);
-          }
-        }
-
-        @keyframes float-gentle {
-          0%,
-          100% {
-            transform: translateY(0) scale(1);
-          }
-          50% {
-            transform: translateY(-15px) scale(1.1);
-          }
-        }
-
-        @keyframes pulse-gentle {
-          0%,
-          100% {
-            box-shadow: 0 0 20px rgba(236, 72, 153, 0.4);
-            transform: scale(1);
-          }
-          50% {
-            box-shadow: 0 0 30px rgba(236, 72, 153, 0.6);
-            transform: scale(1.02);
-          }
-        }
-
-        @keyframes heart-float {
-          0%,
-          100% {
-            transform: translateY(0) scale(1);
-            opacity: 0.2;
-          }
-          50% {
-            transform: translateY(-20px) scale(1.2);
-            opacity: 0.4;
-          }
-        }
-
-        @keyframes heartbeat {
-          0%,
-          100% {
-            transform: scale(1);
-          }
-          10%,
-          30% {
-            transform: scale(1.2);
-          }
-          20%,
-          40% {
-            transform: scale(1);
-          }
-        }
-
-        @keyframes text-glow {
-          0%,
-          100% {
-            text-shadow:
-              0 0 20px rgba(255, 255, 255, 0.5),
-              0 0 40px rgba(255, 182, 193, 0.3);
-          }
-          50% {
-            text-shadow:
-              0 0 30px rgba(255, 255, 255, 0.8),
-              0 0 60px rgba(255, 182, 193, 0.5);
-          }
-        }
-
-        @keyframes bounce-heart {
-          0%,
-          100% {
-            transform: translateY(0) scale(1);
-          }
-          50% {
-            transform: translateY(-10px) scale(1.1);
-          }
-        }
-
-        @keyframes fade-in-slow {
-          0% {
-            opacity: 0;
-            transform: scale(0.95);
-          }
-          100% {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-
-        @keyframes photo-reveal {
-          0% {
-            opacity: 0;
-            transform: scale(0.5) rotateY(90deg);
-          }
-          50% {
-            transform: scale(1.1) rotateY(0deg);
-          }
-          100% {
-            opacity: 1;
-            transform: scale(1) rotateY(0deg);
-          }
-        }
-
-        @keyframes sparkle-explosion {
-          0% {
-            opacity: 1;
-            transform: translate(-50%, -50%) scale(0);
-          }
-          50% {
-            opacity: 1;
-          }
-          100% {
-            opacity: 0;
-            transform: translate(-50%, -50%) scale(3);
-          }
-        }
-
-        @keyframes border-spin {
-          0% {
-            box-shadow: 0 0 30px rgba(236, 72, 153, 0.5);
-          }
-          50% {
-            box-shadow: 0 0 50px rgba(139, 92, 246, 0.8);
-          }
-          100% {
-            box-shadow: 0 0 30px rgba(236, 72, 153, 0.5);
-          }
-        }
-
-        @keyframes photo-zoom {
-          0% {
-            transform: scale(0.8);
-            opacity: 0;
-          }
-          100% {
-            transform: scale(1);
-            opacity: 1;
-          }
-        }
-
-        @keyframes heart-pulse {
-          0%,
-          100% {
-            transform: scale(1);
-            filter: drop-shadow(0 0 10px rgba(255, 182, 193, 0.5));
-          }
-          50% {
-            transform: scale(1.3);
-            filter: drop-shadow(0 0 20px rgba(255, 182, 193, 0.8));
-          }
-        }
-
-        @keyframes spin-slow {
-          from {
-            transform: rotate(0deg);
-          }
-          to {
-            transform: rotate(360deg);
-          }
-        }
-
-        @keyframes gradient {
-          0% {
-            background-position: 0% 50%;
-          }
-          50% {
-            background-position: 100% 50%;
-          }
-          100% {
-            background-position: 0% 50%;
-          }
-        }
-
-        .animate-glow-pulse {
-          animation: glow-pulse 2s ease-in-out infinite;
-        }
-
-        .animate-float-sparkle {
-          animation: float-sparkle linear infinite;
-        }
-
-        .animate-float-geo {
-          animation: float-geo ease-in-out infinite;
-        }
-
-        .animate-shimmer {
-          animation: shimmer 3s ease-in-out infinite;
-        }
-
-        .animate-twinkle {
-          animation: twinkle 2s ease-in-out infinite;
-        }
-
-        .animate-rainbow-text {
-          animation: rainbow-text 5s ease infinite;
-        }
-
-        .animate-pulse-slow {
-          animation: pulse-slow 3s ease-in-out infinite;
-        }
-
-        .animate-bounce-subtle {
-          animation: bounce-subtle 2s ease-in-out infinite;
-        }
-
-        .animate-bounce-gentle {
-          animation: bounce-gentle 2s ease-in-out infinite;
-        }
-
-        .animate-scale-in {
-          animation: scale-in 0.5s ease-out;
-        }
-
-        .animate-fade-in-up {
-          animation: fade-in-up 0.8s ease-out;
-        }
-
-        .animate-name-reveal {
-          animation: name-reveal 1s ease-out;
-        }
-
-        .animate-sparkle-around {
-          animation: sparkle-around 2s ease-in-out infinite;
-        }
-
-        .animate-pulse-button {
-          animation: pulse-button 2s ease-in-out infinite;
-        }
-
-        .animate-fade-in {
-          animation: fade-in 1s ease-out;
-        }
-
-        .animate-wish-appear {
-          animation: wish-appear 0.8s ease-out;
-        }
-
-        .animate-float-gentle {
-          animation: float-gentle 3s ease-in-out infinite;
-        }
-
-        .animate-pulse-gentle {
-          animation: pulse-gentle 2s ease-in-out infinite;
-        }
-
-        .animate-heart-float {
-          animation: heart-float ease-in-out infinite;
-        }
-
-        .animate-heartbeat {
-          animation: heartbeat 1.5s ease-in-out infinite;
-        }
-
-        .animate-text-glow {
-          animation: text-glow 2s ease-in-out infinite;
-        }
-
-        .animate-bounce-heart {
-          animation: bounce-heart 1s ease-in-out infinite;
-        }
-
-        .animate-fade-in-slow {
-          animation: fade-in-slow 1.5s ease-out;
-        }
-
-        .animate-photo-reveal {
-          animation: photo-reveal 1.2s ease-out;
-        }
-
-        .animate-sparkle-explosion {
-          animation: sparkle-explosion 1.5s ease-out forwards;
-        }
-
-        .animate-border-spin {
-          animation: border-spin 3s ease-in-out infinite;
-        }
-
-        .animate-photo-zoom {
-          animation: photo-zoom 1s ease-out;
-        }
-
-        .animate-heart-pulse {
-          animation: heart-pulse 2s ease-in-out infinite;
-        }
-
-        .animate-spin-slow {
-          animation: spin-slow 20s linear infinite;
-        }
-
-        .animate-gradient {
-          background-size: 200% 200%;
-          animation: gradient 5s ease infinite;
-        }
-      `}</style>
-    </div>
+    <button style={base} {...handlers} onClick={onClick}>
+      {btn.label}
+    </button>
   );
 }
 
-function Flower({ color, size, isActive, isClicked }) {
-  const sizes = {
-    small: {
-      petal: "w-4 h-7 xs:w-5 xs:h-8 sm:w-6 sm:h-10",
-      center: "w-4 h-4 xs:w-5 xs:h-5 sm:w-6 sm:h-6",
-    },
-    medium: {
-      petal: "w-5 h-8 xs:w-6 xs:h-10 sm:w-7 sm:h-12 md:w-8 md:h-13",
-      center: "w-5 h-5 xs:w-6 xs:h-6 sm:w-7 sm:h-7 md:w-8 md:h-8",
-    },
-    large: {
-      petal: "w-6 h-10 xs:w-7 xs:h-11 sm:w-8 sm:h-13 md:w-10 md:h-15",
-      center: "w-6 h-6 xs:w-7 xs:h-7 sm:w-8 sm:h-8 md:w-10 md:h-10",
-    },
+/* ─── Main App ─── */
+export default function Calculator() {
+  const [display, setDisplay] = useState("0");
+  const [firstVal, setFirstVal] = useState(null);
+  const [operator, setOperator] = useState(null);
+  const [waitNext, setWaitNext] = useState(false);
+  const [history, setHistory] = useState("");
+  const [activeOp, setActiveOp] = useState(null);
+  const [isError, setIsError] = useState(false);
+  const [flash, setFlash] = useState(false);
+  const clock = useClock();
+
+  /* inject font */
+  useEffect(() => {
+    if (!document.querySelector("#calc-fonts")) {
+      const l = document.createElement("link");
+      l.id = "calc-fonts";
+      l.rel = "stylesheet";
+      l.href = FONT_LINK;
+      document.head.appendChild(l);
+    }
+  }, []);
+
+  const triggerFlash = () => {
+    setFlash(true);
+    setTimeout(() => setFlash(false), 180);
   };
 
-  const currentSize = sizes[size];
+  const handleInput = useCallback(
+    (action, type) => {
+      setIsError(false);
 
-  const petalOffset = {
-    small: "12",
-    medium: "14",
-    large: "16",
-  };
+      if (type === "fn") {
+        if (action === "clear") {
+          setDisplay("0");
+          setFirstVal(null);
+          setOperator(null);
+          setWaitNext(false);
+          setHistory("");
+          setActiveOp(null);
+        } else if (action === "negate") {
+          const v = parseFloat(display.replace(/,/g, ""));
+          if (!isNaN(v)) setDisplay(fmt(-v));
+        } else if (action === "percent") {
+          const v = parseFloat(display.replace(/,/g, ""));
+          if (!isNaN(v)) {
+            const result = firstVal !== null ? (firstVal * v) / 100 : v / 100;
+            setDisplay(fmt(result));
+          }
+        }
+        return;
+      }
+
+      if (type === "op") {
+        const cur = parseFloat(display.replace(/,/g, ""));
+        if (firstVal !== null && !waitNext && operator) {
+          const res = compute(firstVal, cur, operator);
+          if (res === null) {
+            setDisplay("Error");
+            setIsError(true);
+            return;
+          }
+          setDisplay(fmt(res));
+          setHistory(`${fmt(res)} ${OP_SYMBOLS[action]}`);
+          setFirstVal(res);
+        } else {
+          setFirstVal(cur);
+          setHistory(`${fmt(cur)} ${OP_SYMBOLS[action]}`);
+        }
+        setOperator(action);
+        setActiveOp(action);
+        setWaitNext(true);
+        return;
+      }
+
+      if (action === "=") {
+        if (operator && firstVal !== null) {
+          const cur = parseFloat(display.replace(/,/g, ""));
+          const h = `${fmt(firstVal)} ${OP_SYMBOLS[operator]} ${fmt(cur)} =`;
+          const res = compute(firstVal, cur, operator);
+          triggerFlash();
+          if (res === null) {
+            setDisplay("Error");
+            setIsError(true);
+            setHistory(h);
+            setFirstVal(null);
+            setOperator(null);
+            setActiveOp(null);
+            setWaitNext(false);
+            return;
+          }
+          setDisplay(fmt(res));
+          setHistory(h);
+          setFirstVal(null);
+          setOperator(null);
+          setActiveOp(null);
+          setWaitNext(false);
+        }
+        return;
+      }
+
+      if (waitNext) {
+        setDisplay(action === "." ? "0." : action);
+        setWaitNext(false);
+        setActiveOp(null);
+      } else {
+        if (action === ".") {
+          if (!display.includes(".")) setDisplay(display + ".");
+        } else if (action === "0") {
+          if (display !== "0") setDisplay(display + "0");
+        } else {
+          setDisplay(display === "0" ? action : display + action);
+        }
+      }
+    },
+    [display, firstVal, operator, waitNext],
+  );
+
+  const rawLen = display.replace(/[,. -]/g, "").length;
+  const numSize = rawLen > 11 ? 34 : rawLen > 8 ? 44 : rawLen > 5 ? 54 : 64;
 
   return (
     <div
-      className="relative inline-block transition-all duration-300"
       style={{
-        animation: isClicked
-          ? "sway 1.5s ease-in-out"
-          : "sway 3s ease-in-out infinite",
-        filter: isClicked
-          ? "brightness(1.2) drop-shadow(0 0 15px rgba(255,255,255,0.5))"
-          : "brightness(1)",
+        minHeight: "100vh",
+        width: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background:
+          "radial-gradient(ellipse at 30% 20%, #1a1030 0%, #0c0a14 60%, #080810 100%)",
+        fontFamily: "'Outfit', sans-serif",
+        padding: "0",
       }}
     >
-      {/* Stem with gradient */}
+      {/* ── Phone shell ── */}
       <div
-        className="absolute left-1/2 top-full transform -translate-x-1/2 w-1.5 h-16 xs:w-2 xs:h-20 sm:h-24 bg-gradient-to-b from-green-400 to-green-600 rounded-full shadow-lg"
-        style={{ transformOrigin: "top" }}
+        style={{
+          width: "100%",
+          maxWidth: 390,
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          background:
+            "linear-gradient(175deg, #13111f 0%, #0d0b18 50%, #0a0914 100%)",
+          position: "relative",
+          overflow: "hidden",
+        }}
       >
-        {/* Animated Leaf 1 */}
-        <div className="absolute left-0 top-6 sm:top-8 w-4 h-7 xs:w-5 xs:h-8 sm:w-6 sm:h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-full transform -rotate-45 origin-top-right animate-leaf-sway"></div>
-        {/* Animated Leaf 2 */}
-        <div className="absolute right-0 top-12 sm:top-16 w-4 h-7 xs:w-5 xs:h-8 sm:w-6 sm:h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-full transform rotate-45 origin-top-left animate-leaf-sway-reverse"></div>
-      </div>
-
-      {/* Petals with glow effect */}
-      <div className="relative">
-        {[...Array(8)].map((_, i) => (
-          <div
-            key={i}
-            className={`absolute ${currentSize.petal} bg-gradient-to-br ${color} rounded-full transition-all duration-300 ${
-              isActive ? "animate-petal-burst" : ""
-            }`}
-            style={{
-              top: "50%",
-              left: "50%",
-              transform: `translate(-50%, -50%) rotate(${i * 45}deg) translateY(-${petalOffset[size]}px)`,
-              transformOrigin: "center",
-              filter: "drop-shadow(0 0 8px rgba(255,255,255,0.3))",
-              boxShadow: isActive ? "0 0 20px rgba(255,255,255,0.8)" : "none",
-              animationDelay: `${i * 0.05}s`,
-            }}
-          >
-            {/* Inner petal shine */}
-            <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent rounded-full"></div>
-          </div>
-        ))}
-
-        {/* Center with animated details */}
+        {/* ambient glow top */}
         <div
-          className={`absolute ${currentSize.center} bg-gradient-radial from-yellow-200 via-yellow-400 to-yellow-600 rounded-full shadow-inner ${
-            isActive ? "animate-pulse-fast" : "animate-center-pulse"
-          }`}
           style={{
-            top: "50%",
+            position: "absolute",
+            top: -60,
             left: "50%",
-            transform: "translate(-50%, -50%)",
-            boxShadow:
-              "0 0 15px rgba(255, 215, 0, 0.6), inset 0 2px 4px rgba(0,0,0,0.2)",
+            transform: "translateX(-50%)",
+            width: 260,
+            height: 180,
+            background:
+              "radial-gradient(ellipse, rgba(201,131,42,0.12) 0%, transparent 70%)",
+            pointerEvents: "none",
+          }}
+        />
+
+        {/* ── Status bar ── */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "14px 28px 0",
+            fontSize: 13,
+            fontWeight: 600,
+            color: "rgba(255,255,255,0.45)",
+            letterSpacing: "0.03em",
           }}
         >
-          {/* Animated center stamens */}
-          {[...Array(12)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-0.5 h-1 xs:h-1.5 bg-gradient-to-t from-orange-600 to-yellow-400 rounded-full animate-stamen-dance"
-              style={{
-                top: "50%",
-                left: "50%",
-                transform: `translate(-50%, -50%) rotate(${i * 30}deg) translateY(-${
-                  size === "large" ? "3" : "2"
-                }px)`,
-                animationDelay: `${i * 0.1}s`,
-              }}
-            />
-          ))}
-
-          {/* Center glow */}
-          <div className="absolute inset-0 rounded-full bg-yellow-300/50 animate-center-glow"></div>
-        </div>
-
-        {/* Sparkle effects when active */}
-        {isActive && (
-          <>
-            {[...Array(8)].map((_, i) => (
+          <span>{clock}</span>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            {/* signal dots */}
+            {[1, 2, 3, 4].map((i) => (
               <div
-                key={`sparkle-${i}`}
-                className="absolute w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full animate-sparkle-burst"
+                key={i}
                 style={{
-                  top: "50%",
-                  left: "50%",
-                  transform: `translate(-50%, -50%) rotate(${i * 45}deg) translateY(-${
-                    size === "large" ? "30" : size === "medium" ? "25" : "20"
-                  }px)`,
-                  animationDelay: `${i * 0.05}s`,
-                  boxShadow: "0 0 10px rgba(255,255,255,0.8)",
+                  width: 3,
+                  height: 3 + i * 2,
+                  borderRadius: 2,
+                  background:
+                    i <= 3 ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.18)",
                 }}
               />
             ))}
-          </>
-        )}
+            <div
+              style={{
+                width: 18,
+                height: 10,
+                borderRadius: 3,
+                border: "1.5px solid rgba(255,255,255,0.35)",
+                marginLeft: 4,
+                position: "relative",
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  top: 2,
+                  left: 2,
+                  right: 4,
+                  bottom: 2,
+                  borderRadius: 1,
+                  background: "rgba(255,255,255,0.5)",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  right: -4,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  width: 2,
+                  height: 5,
+                  borderRadius: 1,
+                  background: "rgba(255,255,255,0.35)",
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* ── Display area ── */}
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "flex-end",
+            padding: "0 28px 28px",
+            minHeight: 200,
+            position: "relative",
+          }}
+        >
+          {/* history expression */}
+          <p
+            style={{
+              textAlign: "right",
+              fontFamily: "'Space Mono', monospace",
+              fontSize: 13,
+              color: "rgba(255,255,255,0.22)",
+              letterSpacing: "0.04em",
+              minHeight: 22,
+              marginBottom: 6,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {history}
+          </p>
+
+          {/* main number */}
+          <div
+            style={{
+              textAlign: "right",
+              fontFamily: "'Space Mono', monospace",
+              fontSize: numSize,
+              fontWeight: 400,
+              lineHeight: 1.05,
+              letterSpacing: "-0.02em",
+              color: isError ? "#f87171" : flash ? "#f0a83c" : "#f5f0ff",
+              transition: "font-size 180ms ease, color 150ms ease",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {display}
+          </div>
+        </div>
+
+        {/* separator */}
+        <div
+          style={{
+            margin: "0 20px",
+            height: 1,
+            background:
+              "linear-gradient(90deg, transparent, rgba(201,168,108,0.12), transparent)",
+          }}
+        />
+
+        {/* ── Button grid ── */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: 14,
+            padding: "20px 18px 40px",
+          }}
+        >
+          {BUTTONS.map((btn) => (
+            <CalcButton
+              key={btn.label}
+              btn={btn}
+              activeOp={activeOp}
+              onClick={() => handleInput(btn.action, btn.type)}
+            />
+          ))}
+        </div>
+
+        {/* bottom home indicator */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            paddingBottom: 12,
+          }}
+        >
+          <div
+            style={{
+              width: 120,
+              height: 4,
+              borderRadius: 4,
+              background: "rgba(255,255,255,0.18)",
+            }}
+          />
+        </div>
       </div>
-
-      <style jsx>{`
-        @keyframes sway {
-          0%,
-          100% {
-            transform: rotate(-2deg);
-          }
-          50% {
-            transform: rotate(2deg);
-          }
-        }
-
-        @keyframes leaf-sway {
-          0%,
-          100% {
-            transform: rotate(-45deg) scale(1);
-          }
-          50% {
-            transform: rotate(-50deg) scale(1.05);
-          }
-        }
-
-        @keyframes leaf-sway-reverse {
-          0%,
-          100% {
-            transform: rotate(45deg) scale(1);
-          }
-          50% {
-            transform: rotate(50deg) scale(1.05);
-          }
-        }
-
-        @keyframes center-pulse {
-          0%,
-          100% {
-            transform: translate(-50%, -50%) scale(1);
-          }
-          50% {
-            transform: translate(-50%, -50%) scale(1.1);
-          }
-        }
-
-        @keyframes center-glow {
-          0%,
-          100% {
-            opacity: 0.5;
-          }
-          50% {
-            opacity: 0.8;
-          }
-        }
-
-        @keyframes stamen-dance {
-          0%,
-          100% {
-            height: 0.375rem;
-          }
-          50% {
-            height: 0.5rem;
-          }
-        }
-
-        @keyframes petal-burst {
-          0% {
-            transform: translate(-50%, -50%) scale(1);
-          }
-          50% {
-            transform: translate(-50%, -50%) scale(1.3);
-          }
-          100% {
-            transform: translate(-50%, -50%) scale(1);
-          }
-        }
-
-        @keyframes sparkle-burst {
-          0% {
-            opacity: 1;
-            transform: translate(-50%, -50%) scale(0);
-          }
-          50% {
-            opacity: 1;
-          }
-          100% {
-            opacity: 0;
-            transform: translate(-50%, -50%) scale(2);
-          }
-        }
-
-        @keyframes pulse-fast {
-          0%,
-          100% {
-            transform: translate(-50%, -50%) scale(1);
-          }
-          50% {
-            transform: translate(-50%, -50%) scale(1.3);
-          }
-        }
-
-        .animate-leaf-sway {
-          animation: leaf-sway 2s ease-in-out infinite;
-        }
-
-        .animate-leaf-sway-reverse {
-          animation: leaf-sway-reverse 2s ease-in-out infinite;
-        }
-
-        .animate-center-pulse {
-          animation: center-pulse 2s ease-in-out infinite;
-        }
-
-        .animate-center-glow {
-          animation: center-glow 2s ease-in-out infinite;
-        }
-
-        .animate-stamen-dance {
-          animation: stamen-dance 1.5s ease-in-out infinite;
-        }
-
-        .animate-petal-burst {
-          animation: petal-burst 0.5s ease-out;
-        }
-
-        .animate-sparkle-burst {
-          animation: sparkle-burst 0.8s ease-out forwards;
-        }
-
-        .animate-pulse-fast {
-          animation: pulse-fast 0.5s ease-in-out;
-        }
-      `}</style>
     </div>
   );
 }
